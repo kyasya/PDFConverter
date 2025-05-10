@@ -1,108 +1,212 @@
-#ifndef __GSWRAPPER_H__
-#define __GSWRAPPER_H__
+#ifndef __GS_WRAPPER_H__
+#define __GS_WRAPPER_H__
 
 #include <string>
 #include <vector>
 #include <array>
 #include <sstream>
 
-class GsWrapper
+//! @brief Ghostscript を使用して PDF を操作するためのラッパークラス
+class GSWrapper
 {
-    public:
-        GsWrapper(const std::string &gsPath = "gs") : GsPath(gsPath) {}
+	public:
+		GSWrapper(){GSWrapper::Init();}
 
-        bool CompressPdf(const std::string &inputPath, const std::string &outputPath);
-        bool ExtractPages(const std::string &inputPath, const std::string &outputPath, int firstPage, int lastPage);
-        bool MergePdfs(const std::vector<std::string> &inputPaths, const std::string &outputPath);
-        bool ImageToPdf(const std::vector<std::string> &imagePaths, const std::string &outputPath);
-        bool PdfToImages(const std::string &inputPath, const std::string &outputPattern, int dpi = 150);
+	private:
+		std::string GSCmd="";
+		std::string Output, Error;
+		bool RunFrag=false;
+	public:
+			void Init();
+			std::string GetOutputText() const {return  Output;}
+			std::string GetErrorText () const {return   Error;}
+			bool        IsRunSuccess () const {return RunFrag;}
 
-    private:
-        std::string GsPath;
-        bool RunCommand(const std::vector<std::string> &args, std::string &output, std::string &error);
+	private:
+		bool RunCommand(const std::vector<std::string> &args);
+
+	public:
+		bool CompressPdf              (const std::string &input_path, const std::string &output_path);
+		bool ExtractPages             (const std::string &input_path, const std::string &output_path, int first_page=1, int last_page=1);
+		bool MergePdfs                (const std::vector<std::string> &input_paths, const std::string &output_path);
+		bool ImageToPdf               (const std::vector<std::string> &image_paths, const std::string &output_path);
+		bool PdfToImages              (const std::string &input_path, const std::string &output_path, int dpi = 350);
+		bool ConvertToGrayscalePdf    (const std::string &input_path, const std::string &output_path);
+		bool ConvertToMonochromeImages(const std::string &input_path, const std::string &output_path, int dpi = 600);
 };
 
-bool GsWrapper::CompressPdf(const std::string &inputPath, const std::string &outputPath)
+//! 初期化
+//! @details constructorのみで呼ばれる
+void GSWrapper::Init()
 {
-    std::vector<std::string> args = {
-        GsPath, "-sDEVICE=pdfwrite",
-        "-dCompatibilityLevel=1.4",
-        "-dPDFSETTINGS=/ebook",
-        "-dNOPAUSE", "-dQUIET", "-dBATCH",
-        "-sOutputFile=" + outputPath,
-        inputPath};
-    std::string out, err;
-    return RunCommand(args, out, err);
+	GSCmd = "gs";
+#ifdef _WIN32
+	GSCmd = "gswin64c";
+#endif
 }
 
-bool GsWrapper::ExtractPages(const std::string &inputPath, const std::string &outputPath, int firstPage, int lastPage)
+
+//! Ghostscriptコマンドを構築して実行し、出力を取得する.
+//! @details エラー情報はGet関数によって個別に呼び出す
+//! @param args コマンドライン引数のリスト
+//! @return bool
+bool GSWrapper::RunCommand(const std::vector<std::string> &args)
 {
-    std::vector<std::string> args = {
-        GsPath, "-sDEVICE=pdfwrite",
-        "-dNOPAUSE", "-dBATCH", "-dQUIET",
-        "-dFirstPage=" + std::to_string(firstPage),
-        "-dLastPage=" + std::to_string(lastPage),
-        "-sOutputFile=" + outputPath,
-        inputPath};
-    std::string out, err;
-    return RunCommand(args, out, err);
+	std::ostringstream Cmd;
+	for (const auto &Arg : args) Cmd <<" "<< Arg;
+
+	std::string Command = Cmd.str() + " 2>&1";
+	// std::cout<<Command<<std::endl;
+
+	std::array<char, 128> Buffer;
+	std::string Result;
+
+	FILE *Pipe = popen(Command.c_str(), "r");
+	if (!Pipe) return false;
+	
+	while (fgets(Buffer.data(), Buffer.size(), Pipe) != nullptr) Result += Buffer.data();
+
+	int Status = pclose(Pipe);
+
+	Output = Result;
+	Error = (Status == 0) ? "" : Result;
+
+	RunFrag = bool(Status);
+	return RunFrag;
 }
 
-bool GsWrapper::MergePdfs(const std::vector<std::string> &inputPaths, const std::string &outputPath)
+//! PDFを圧縮する
+//! @param input_path 入力PDFファイルのパス
+//! @param output_path 出力PDFファイルのパス
+//! @return bool
+bool GSWrapper::CompressPdf(const std::string &input_path, const std::string &output_path)
 {
-    std::vector<std::string> args = {
-        GsPath, "-dBATCH", "-dNOPAUSE", "-q", "-sDEVICE=pdfwrite",
-        "-sOutputFile=" + outputPath};
-    args.insert(args.end(), inputPaths.begin(), inputPaths.end());
-    std::string out, err;
-    return RunCommand(args, out, err);
+	std::vector<std::string> Args=
+	{
+		GSCmd, "-sDEVICE=pdfwrite",
+		"-dCompatibilityLevel=1.4",
+		"-dPDFSETTINGS=/ebook",
+		"-dNOPAUSE", "-dQUIET", "-dBATCH",
+		"-sOutputFile=" + output_path,
+		input_path
+	};
+
+	return GSWrapper::RunCommand(Args);
 }
 
-bool GsWrapper::ImageToPdf(const std::vector<std::string> &imagePaths, const std::string &outputPath)
+//! 指定したページ範囲をPDFから抽出する
+//! @param input_path 入力PDFファイルのパス
+//! @param output_path 出力PDFファイルのパス
+//! @param first_page 抽出開始ページ番号
+//! @param last_page 抽出終了ページ番号
+//! @return bool
+bool GSWrapper::ExtractPages(const std::string &input_path, const std::string &output_path, int first_page, int last_page)
 {
-    std::vector<std::string> args = {
-        GsPath, "-dBATCH", "-dNOPAUSE", "-q", "-sDEVICE=pdfwrite",
-        "-sOutputFile=" + outputPath};
-    args.insert(args.end(), imagePaths.begin(), imagePaths.end());
-    std::string out, err;
-    return RunCommand(args, out, err);
+	std::vector<std::string> Args=
+	{
+		GSCmd, "-sDEVICE=pdfwrite",
+		"-dNOPAUSE", "-dBATCH", "-dQUIET",
+		"-dFirstPage="+std::to_string(first_page),
+		"-dLastPage=" +std::to_string(last_page),
+		"-sOutputFile=" + output_path,
+		input_path
+	};
+
+	return GSWrapper::RunCommand(Args);
 }
 
-bool GsWrapper::PdfToImages(const std::string &inputPath, const std::string &outputPattern, int dpi)
+//! 複数のPDFを1つのPDFに結合する
+//! @param input_paths 入力PDFファイルのパス一覧
+//! @param output_path 出力PDFファイルのパス
+//! @return bool
+bool GSWrapper::MergePdfs(const std::vector<std::string> &input_paths, const std::string &output_path)
 {
-    std::vector<std::string> args = {
-        GsPath,
-        "-dBATCH", "-dNOPAUSE", "-q",
-        "-sDEVICE=png16m",
-        "-r" + std::to_string(dpi),
-        "-sOutputFile=" + outputPattern,
-        inputPath};
-    std::string out, err;
-    return RunCommand(args, out, err);
+	std::vector<std::string> Args=
+	{
+		GSCmd, "-dBATCH", "-dNOPAUSE", "-q", "-sDEVICE=pdfwrite",
+		"-sOutputFile="+output_path,
+	};
+	Args.insert(Args.end(), input_paths.begin(), input_paths.end());
+	
+	return GSWrapper::RunCommand(Args);
 }
 
-bool GsWrapper::RunCommand(const std::vector<std::string> &args, std::string &output, std::string &error)
+//! 画像ファイルのリストを1つのPDFに変換する
+//! @param image_paths 入力画像ファイルのパス一覧
+//! @param output_path 出力PDFファイルのパス
+//! @return bool
+bool GSWrapper::ImageToPdf(const std::vector<std::string> &image_paths, const std::string &output_path)
 {
-    std::ostringstream cmd;
-    for (const auto &arg : args)
-    {
-        cmd << "\"" << arg << "\" ";
-    }
-    std::string command = cmd.str() + "2>&1";
+	std::vector<std::string> Args=
+	{
+		GSCmd, "-dBATCH", "-dNOPAUSE", "-q", "-sDEVICE=pdfwrite",
+		"-sOutputFile="+output_path,
+	};
+	Args.insert(Args.end(), image_paths.begin(), image_paths.end());
+	
+	return GSWrapper::RunCommand(Args);
+}
 
-    std::array<char, 128> buffer;
-    std::string result;
-    FILE *pipe = popen(command.c_str(), "r");
-    if (!pipe)
-        return false;
-    while (fgets(buffer.data(), buffer.size(), pipe) != nullptr)
-    {
-        result += buffer.data();
-    }
-    int status = pclose(pipe);
-    output = result;
-    error = (status == 0) ? "" : result;
-    return status == 0;
+//! PDFを複数のPNG画像に変換する
+//! @param input_path 入力PDFファイルのパス
+//! @param output_path 出力ファイル名のパターン（例：page-%03d.png）
+//! @param dpi 解像度（dpi単位）
+//! @return bool
+bool GSWrapper::PdfToImages(const std::string &input_path, const std::string &output_path, int dpi)
+{
+	std::vector<std::string> Args=
+	{
+		GSCmd,
+		"-dBATCH", "-dNOPAUSE", "-q",
+		"-sDEVICE=png16m",
+		"-r" + std::to_string(dpi),
+		"-sOutputFile="+output_path,
+		input_path
+	};
+
+	return GSWrapper::RunCommand(Args);
+}
+
+//! PDFをグレースケールに変換する
+//! @param input_path 入力PDFファイルのパス
+//! @param output_path 出力PDFファイルのパス
+//! @return bool
+bool GSWrapper::ConvertToGrayscalePdf(const std::string &input_path, const std::string &output_path)
+{
+	std::vector<std::string> Args=
+	{
+		GSCmd,
+		"-sDEVICE=pdfwrite",
+		"-dCompatibilityLevel=1.4",
+		"-dColorConversionStrategy=Gray",
+		"-dProcessColorModel=/DeviceGray",
+		"-dNOPAUSE", "-dBATCH", "-dQUIET",
+		"-sOutputFile="+output_path,
+		input_path
+	};
+
+	
+	return GSWrapper::RunCommand(Args);
+}
+
+//! PDFをモノクロ（1ビット）PNG画像に変換する
+//! @param input_path 入力PDFファイルのパス
+//! @param output_path 出力ファイル名のパターン
+//! @param dpi 解像度（dpi単位）
+//! @return bool
+bool GSWrapper::ConvertToMonochromeImages(const std::string &input_path, const std::string &output_path, int dpi)
+{
+	std::vector<std::string> Args=
+	{
+		GSCmd,
+		"-sDEVICE=pngmono",
+		"-r"+std::to_string(dpi),
+		"-dNOPAUSE", "-dBATCH", "-dQUIET",
+		"-sOutputFile="+output_path,
+		input_path
+	};
+
+	return GSWrapper::RunCommand(Args);
 }
 
 #endif

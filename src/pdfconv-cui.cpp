@@ -1,28 +1,30 @@
 #include <iostream>
 #include "KFileSystem.h"
-#include "GSWrapper.h"
+#include "KPDFConv.h"
+
+void ShowHelp()
+{
+	std::cout<<"-- HELP --\n"
+	<<"pdfconv-cui [mode] [input-path] (page-range@extractor) [output-path(option)]"<<std::endl;
+}
 
 int main(int argc, char **argv)
 {
-	GSWrapper gs;
+	if (argc<=2){ShowHelp(); return -1;}
+	std::string Mode=argv[1];
 
-	// // 1. 圧縮
-	// if (gs.CompressPdf("./data.pdf", "./data_compressed.pdf"))
-	// {
-	// 	std::cout << "PDF圧縮成功\n";
-	// }
-	// else
-	// {
-	// 	std::cerr << "PDF圧縮失敗\n";
-	// }
+	bool RunFlag=false;
+
+	KPDFConverter gs;
 
 	std::cout<<KFileSystem::PathExists("pd.pdf")<<std::endl;
 
-	// 2. ページ抽出（1〜2ページ）
-	if (gs.ExtractPages("pd.pdf", "data_pages-1-2.pdf", 1, 2))
-		std::cout << "ページ抽出成功\n";
-	else
-		std::cerr << "ページ抽出失敗\n";
+	if (Mode=="--extract")
+	{
+		std::string Buf="";
+		if(argc==5) Buf=argv[4];
+		RunFlag = gs.ExtractPages(argv[3], argv[2], Buf);
+	}
 
 	// // 3. PDF結合（2つを連結）
 	// std::vector<std::string> filesToMerge = {
@@ -58,5 +60,8 @@ int main(int argc, char **argv)
 		std::cerr << "PDFから画像変換失敗\n";
 	}
 
-	return 0;
+	if(RunFlag){std::cout<<"Success"<<std::endl; return 0;}
+
+	std::cout<<"Failed"<<std::endl;
+	return -1;
 }
