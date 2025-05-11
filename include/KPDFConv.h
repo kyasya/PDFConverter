@@ -1,6 +1,7 @@
 #ifndef __K_PDF_CONVERTER_H__
 #define __K_PDF_CONVERTER_H__
 
+#include <iostream>
 #include <string>
 #include <vector>
 #include <array>
@@ -54,9 +55,9 @@ bool KPDFConverter::CompressPdf (const std::string &input_path, const std::strin
 
 	if (output_path.empty())
     {
-        size_t dot_pos = input_path.find_last_of(".");
-        if (dot_pos != std::string::npos)
-			Buf=input_path.substr(0, dot_pos)+"-compressed"+input_path.substr(dot_pos);
+        size_t DotPos = input_path.find_last_of(".");
+        if (DotPos != std::string::npos)
+			Buf=input_path.substr(0, DotPos)+"-compressed"+input_path.substr(DotPos);
         else Buf=input_path+"-compressed.pdf";
 		OutPath=Buf;
     }
@@ -71,34 +72,40 @@ bool KPDFConverter::CompressPdf (const std::string &input_path, const std::strin
 bool KPDFConverter::ExtractPages(std::string page, const std::string &input_path, const std::string &output_path)
 {
 	KPDFConverter::SetPath(input_path, output_path);
+	// std::cout<<"Pagetag:"<<page<<std::endl;
 
-	std::vector<std::array<int, 2>> Result;
+	// std::vector<std::array<int, 2>> Result;
+	std::vector<int> Result;
     std::stringstream ss(page);
-    std::string token;
+    std::string Token;
 
-    while (std::getline(ss, token, ',')) 
+    while (std::getline(ss, Token, ',')) 
 	{
-        size_t dash_pos = token.find('-');
-        if (dash_pos != std::string::npos) 
+		// std::cout<<"Token:"<<Token<<std::endl;
+
+        size_t DashPos = Token.find('-');
+        if (DashPos != std::string::npos) 
 		{
-            int start = std::stoi(token.substr(0, dash_pos));
-            int end = std::stoi(token.substr(dash_pos + 1));
-            Result.push_back({start, end});
+            int Start = std::stoi(Token.substr(0, DashPos));
+            int End   = std::stoi(Token.substr(DashPos + 1));
+            for(auto i=Start; i<=End; i++) Result.push_back(i);
         }
+		else Result.push_back(std::stoi(Token));
     }
 
-	for (const auto& range : Result) 
+	for (const auto& index: Result) 
 	{
 		std::string Buf="-extraction-error";
         // std::cout<<range[0]<<"->"<<range[1]<<"\n";
 		if (output_path.empty())
 		{
-			size_t dot_pos = input_path.find_last_of(".");
-			if (dot_pos != std::string::npos) 
-				Buf=input_path.substr(0, dot_pos)+"-"+std::to_string(range[0])+"-"+std::to_string(range[1])+input_path.substr(dot_pos);
+			size_t DotPos = input_path.find_last_of(".");
+			if (DotPos != std::string::npos) 
+				Buf=input_path.substr(0, DotPos)+"-"+std::to_string(index)+input_path.substr(DotPos);
 			OutPath=Buf;
 		}
-		GSWrapper::ExtractPages(InpPath, OutPath, range[0], range[1]);
+		std::cout<<"OutPath="<<OutPath<<std::endl;
+		GSWrapper::ExtractPages(InpPath, OutPath, index, index);
     }
 
 	return true;
@@ -113,9 +120,9 @@ bool KPDFConverter::MergePdfs   (const std::vector<std::string> &input_paths, co
 	OutPath="merged.pdf";
 	if (output_path.empty())
 	{
-		size_t dot_pos = input_paths[0].find_last_of(".");
-		if (dot_pos != std::string::npos) 
-			OutPath=input_paths[0].substr(0, dot_pos)+"-merged"+input_paths[0].substr(dot_pos);
+		size_t DotPos = input_paths[0].find_last_of(".");
+		if (DotPos != std::string::npos) 
+			OutPath=input_paths[0].substr(0, DotPos)+"-merged"+input_paths[0].substr(DotPos);
 	}
 	return GSWrapper::MergePdfs(input_paths, OutPath);
 }
@@ -142,9 +149,9 @@ bool KPDFConverter::PdfToImages (const std::string &input_path, const std::strin
 	KPDFConverter::SetPath(input_path, output_path);
 	if (output_path.empty())
 	{
-		size_t dot_pos = input_path.find_last_of(".");
-		if (dot_pos != std::string::npos) 
-			OutPath=input_path.substr(0, dot_pos)+"-%03d"+input_path.substr(dot_pos);
+		size_t DotPos = input_path.find_last_of(".");
+		if (DotPos != std::string::npos) 
+			OutPath=input_path.substr(0, DotPos)+"-%03d"+input_path.substr(DotPos);
 	}
 
 	return GSWrapper::PdfToImages(InpPath, OutPath, dpi);
@@ -159,9 +166,9 @@ bool KPDFConverter::ConvertToGrayscalePdf(const std::string &input_path, const s
 	KPDFConverter::SetPath(input_path, output_path);
 	if (output_path.empty())
 	{
-		size_t dot_pos = input_path.find_last_of(".");
-		if (dot_pos != std::string::npos) 
-			OutPath=input_path.substr(0, dot_pos)+"-grayscale"+input_path.substr(dot_pos);
+		size_t DotPos = input_path.find_last_of(".");
+		if (DotPos != std::string::npos) 
+			OutPath=input_path.substr(0, DotPos)+"-grayscale"+input_path.substr(DotPos);
 	}
 	return GSWrapper::ConvertToGrayscalePdf(InpPath, OutPath);
 }
@@ -176,9 +183,9 @@ bool KPDFConverter::ConvertToMonochromeImages(const std::string &input_path, con
 	KPDFConverter::SetPath(input_path, output_path);
 	if (output_path.empty())
 	{
-		size_t dot_pos = input_path.find_last_of(".");
-		if (dot_pos != std::string::npos) 
-			OutPath=input_path.substr(0, dot_pos)+"-monochrome"+input_path.substr(dot_pos);
+		size_t DotPos = input_path.find_last_of(".");
+		if (DotPos != std::string::npos) 
+			OutPath=input_path.substr(0, DotPos)+"-monochrome"+input_path.substr(DotPos);
 	}
 
 	return GSWrapper::ConvertToMonochromeImages(InpPath, OutPath, dpi);
